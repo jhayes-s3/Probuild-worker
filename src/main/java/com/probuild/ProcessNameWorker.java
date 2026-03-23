@@ -1,4 +1,4 @@
-package com.example.camundaworker;
+package com.probuild;
 
 import io.camunda.client.annotation.JobWorker;
 import io.camunda.client.api.response.ActivatedJob;

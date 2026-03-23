@@ -9,11 +9,11 @@
         <version>3.5.9</version>
         <relativePath /> <!-- lookup parent from repository -->
     </parent>
-    <groupId>io.camunda.demo</groupId>
-    <artifactId>process_order</artifactId>
+    <groupId>com.probuild</groupId>
+    <artifactId>Probuild-worker</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>Process Order</name>
-    <description>Process Order Example for Camunda 8</description>
+    <name>Probuild-worker</name>
+    <description>Probuild Camunda Worker</description>
     <url />
     <licenses>
         <license />
