@@ -26,10 +26,17 @@ public class MessagePublisher {
     private RestTemplate restTemplate;
 
     public void publish(String messageName, String correlationKey) {
+        publish(messageName, correlationKey, null);
+    }
+
+    public void publish(String messageName, String correlationKey, Map<String, Object> variables) {
         Map<String, Object> body = new HashMap<>();
         body.put("name", messageName);
         body.put("correlationKey", correlationKey);
         body.put("timeToLive", 30000L);
+        if (variables != null && !variables.isEmpty()) {
+            body.put("variables", variables);
+        }
 
         LOGGER.info("Auto-publishing {} with correlationKey={}", messageName, correlationKey);
         restTemplate.postForObject(ZEEBE_PUBLISH_URL, body, Map.class);
