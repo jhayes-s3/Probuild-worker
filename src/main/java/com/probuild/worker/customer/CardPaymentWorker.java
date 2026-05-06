@@ -5,7 +5,10 @@ import io.camunda.client.api.response.ActivatedJob;
 import io.camunda.client.api.worker.JobClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,7 +20,11 @@ public class CardPaymentWorker {
     private static final Logger LOGGER =
             LoggerFactory.getLogger(CardPaymentWorker.class);
 
+    private static final String API_BASE = "http://localhost:8081";
     private static final double MEMBERSHIP_DISCOUNT_RATE = 0.10;
+
+    @Autowired
+    private RestTemplate restTemplate;
 
     private static final Map<String, Double> TOOL_PRICES = Map.of(
             "drill", 15.00,
@@ -100,10 +107,33 @@ public class CardPaymentWorker {
         LOGGER.info("Payment accepted: {}", paymentAccepted);
         LOGGER.info("Final price calculated: £{}", roundToMoney(finalPrice));
 
+        if (paymentAccepted) {
+            persistCardDetailsToCustomer(variables, cardNumber, cardExpiry, cardCvv);
+        }
+
         client.newCompleteCommand(job.getKey())
                 .variables(result)
                 .send()
                 .join();
+    }
+
+    private void persistCardDetailsToCustomer(Map<String, Object> variables,
+                                              String cardNumber, String cardExpiry, String cardCvv) {
+        Object customerId = variables.get("customerId");
+        if (!(customerId instanceof Integer cid)) {
+            LOGGER.info("No customerId in variables; skipping customer card update");
+            return;
+        }
+        UriComponentsBuilder url = UriComponentsBuilder.fromHttpUrl(API_BASE + "/customers/" + cid);
+        if (!cardNumber.isBlank()) url.queryParam("cardNumber", maskCardNumber(cardNumber));
+        if (!cardExpiry.isBlank()) url.queryParam("cardExpiry", cardExpiry);
+        if (!cardCvv.isBlank()) url.queryParam("cardCvc", cardCvv);
+        try {
+            restTemplate.put(url.toUriString(), null);
+            LOGGER.info("Customer {} updated with payment card details", cid);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to update Customer card details: {}", e.getMessage());
+        }
     }
 
     private double getToolPrice(String toolName) {
