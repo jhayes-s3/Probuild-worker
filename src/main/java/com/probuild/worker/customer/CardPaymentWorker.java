@@ -21,7 +21,19 @@ public class CardPaymentWorker {
             LoggerFactory.getLogger(CardPaymentWorker.class);
 
     private static final String API_BASE = "http://localhost:8081";
-    private static final double MEMBERSHIP_DISCOUNT_RATE = 0.10;
+    /**
+     * Trade Card discount band — three tiers, capped at 10%.
+     * Anyone with a card gets at least 2% (entry tier — no 0% so the £10/year
+     * membership is worth signing up for).
+     *   0-499 pts     = 2%   (entry)
+     *   500-1999 pts  = 5%   (mid)
+     *   2000+ pts     = 10%  (top)
+     */
+    private static final double DISCOUNT_TIER_ENTRY = 0.02;
+    private static final double DISCOUNT_TIER_MID = 0.05;
+    private static final double DISCOUNT_TIER_TOP = 0.10;
+    private static final int TIER_MID_THRESHOLD = 500;
+    private static final int TIER_TOP_THRESHOLD = 2000;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -60,11 +72,15 @@ public class CardPaymentWorker {
         double dailyToolPrice = getToolPrice(toolNameToUse);
         double originalPrice = dailyToolPrice * quantity * duration;
 
-        double discountAmount = 0.00;
+        double discountRate = 0.00;
+        Integer pointsBalance = null;
         if (membershipBeingUsed) {
-            discountAmount = originalPrice * MEMBERSHIP_DISCOUNT_RATE;
+            pointsBalance = lookupTradeCardPoints(variables.get("customerId"));
+            discountRate = pointsToDiscountRate(pointsBalance);
+            LOGGER.info("Trade card points={} -> discount band {}%",
+                    pointsBalance, (int) (discountRate * 100));
         }
-
+        double discountAmount = originalPrice * discountRate;
         double finalPrice = originalPrice - discountAmount;
         boolean moreThan100 = finalPrice > 100.00;
 
@@ -92,9 +108,13 @@ public class CardPaymentWorker {
         result.put("dailyToolPrice", dailyToolPrice);
         result.put("originalPrice", roundToMoney(originalPrice));
         result.put("membershipDiscountApplied", membershipBeingUsed);
+        result.put("discountRate", discountRate);
         result.put("discountAmount", roundToMoney(discountAmount));
         result.put("finalPrice", roundToMoney(finalPrice));
         result.put("moreThan100", moreThan100);
+        if (pointsBalance != null) {
+            result.put("tradeCardPointsAtCheckout", pointsBalance);
+        }
 
         result.put("maskedCardNumber", maskCardNumber(cardNumber));
 
@@ -133,6 +153,36 @@ public class CardPaymentWorker {
             LOGGER.info("Customer {} updated with payment card details", cid);
         } catch (Exception e) {
             LOGGER.warn("Failed to update Customer card details: {}", e.getMessage());
+        }
+    }
+
+    /** Convert a points balance to a discount rate. Card-holders always get
+     *  at least the entry tier; reaching higher tiers bumps it. */
+    private double pointsToDiscountRate(Integer pointsBalance) {
+        int pts = pointsBalance == null ? 0 : pointsBalance;
+        if (pts >= TIER_TOP_THRESHOLD) return DISCOUNT_TIER_TOP;
+        if (pts >= TIER_MID_THRESHOLD) return DISCOUNT_TIER_MID;
+        return DISCOUNT_TIER_ENTRY;
+    }
+
+    /** Look up the customer's trade card and return the highest points balance, or null if no card. */
+    @SuppressWarnings("unchecked")
+    private Integer lookupTradeCardPoints(Object customerIdVar) {
+        if (!(customerIdVar instanceof Integer cid)) return null;
+        try {
+            Object[] cards = restTemplate.getForObject(
+                    API_BASE + "/tradecards/customer/" + cid, Object[].class);
+            if (cards == null || cards.length == 0) return null;
+            int best = 0;
+            for (Object o : cards) {
+                if (o instanceof Map<?, ?> m && m.get("pointsBalance") instanceof Integer p) {
+                    best = Math.max(best, p);
+                }
+            }
+            return best;
+        } catch (Exception e) {
+            LOGGER.warn("Failed to look up trade card points for Customer {}: {}", cid, e.getMessage());
+            return null;
         }
     }
 
