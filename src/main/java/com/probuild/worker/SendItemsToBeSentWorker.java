@@ -30,6 +30,14 @@ public class SendItemsToBeSentWorker {
 
         messagePublisher.publish("Message-recieve-items-to-be-sent", itemsToBeSent);
 
+        if (purchaseOrderId != null) {
+            LOGGER.info("Auto-triggering supplier process for PO={}", purchaseOrderId);
+            messagePublisher.publish(
+                    "Message-supplier-receives-po",
+                    purchaseOrderId.toString(),
+                    Map.of("purchaseOrderId", purchaseOrderId));
+        }
+
         Map<String, Object> result = new HashMap<>();
         result.put("itemsDispatched", true);
         result.put("itemsToBeSent", itemsToBeSent);
