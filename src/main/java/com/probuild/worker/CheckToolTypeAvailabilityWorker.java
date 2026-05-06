@@ -12,7 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.util.*;
 
 @Component
-public class ToolExistsByNameWorker {
+public class CheckToolTypeAvailabilityWorker {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolAvailabilityWorker.class);
 
@@ -65,9 +65,9 @@ public class ToolExistsByNameWorker {
             LOGGER.warn("No matching tool found for name: {}", requestedToolName);
         }
 
-        result.put("toolFound", found);
-//        result.put("selectedToolId", foundId);
-//        result.put("selectedToolName", foundName != null ? foundName : "none");
+        result.put("toolAvailable", found);
+        result.put("selectedToolId", foundId);
+        result.put("selectedToolName", foundName != null ? foundName : "none");
 
         client.newCompleteCommand(job.getKey())
                 .variables(result)
